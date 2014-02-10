@@ -150,7 +150,8 @@ object WebPlugin extends sbt.Plugin {
     unmanagedSources <<= (unmanagedSourceDirectories, includeFilter, excludeFilter) map locateSources,
     resourceDirectories := Seq(sourceDirectory.value, resourceDirectory.value),
     unmanagedResources <<= (resourceDirectories, includeFilter, excludeFilter) map locateSources,
-    copyResources <<= copyResourcesTask
+    copyResources <<= copyResourcesTask,
+    mappings <<= (resourceManaged map subpaths).dependsOn(copyResources, compile in Compile)
   ) ++ extractWebJarsSettings
 
   private def locateSources(sourceDirectories: Seq[File], includeFilter: FileFilter, excludeFilter: FileFilter): Seq[File] =
@@ -164,6 +165,9 @@ object WebPlugin extends sbt.Plugin {
       mappings
     }
   }
+
+  private def subpaths(dir: File): Seq[(File, String)] =
+    Path.selectSubpaths(dir, new SimpleFileFilter(!_.isDirectory)).toSeq
 
   private def withWebJarExtractor(to: File, cacheFile: File, classLoader: ClassLoader)
                                  (block: (WebJarExtractor, File) => Unit): File = {

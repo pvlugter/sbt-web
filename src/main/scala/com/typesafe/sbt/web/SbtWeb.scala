@@ -31,7 +31,7 @@ object Import {
     val nodeModules = TaskKey[Seq[File]]("web-node-modules", "All node module files.")
 
     val webModuleDirectory = SettingKey[File]("web-module-directory", "Default web modules directory, used for web browser based resources.")
-    val webModuleDirectories = TaskKey[Seq[File]]("web-module-directories", "The list of directories that web browser modules are to expand into.")
+    val webModuleDirectories = SettingKey[Seq[File]]("web-module-directories", "The list of directories that web browser modules are to expand into.")
     val webModuleGenerators = SettingKey[Seq[Task[Seq[File]]]]("web-module-generators", "List of tasks that generate web browser modules.")
     val webModulesLib = SettingKey[String]("web-modules-lib", "The sub folder of the path to extract web browser modules to")
     val webModules = TaskKey[Seq[File]]("web-modules", "All web browser module files.")
@@ -281,15 +281,27 @@ object SbtWeb extends AutoPlugin {
     nodeModules := nodeModuleGenerators(_.join).map(_.flatten).value
   )
 
+  /*
+   * Create a task that gets the combined exportedMappings from all project and configuration dependencies.
+   */
   private def interDependencies(projectRef: ProjectRef, conf: Configuration, data: Settings[Scope], deps: BuildDependencies): Task[Seq[PathMapping]] = {
+    // map each (project, configuration) pair from getDependencies to its exportedMappings task
     val tasks = for ((p, c) <- getDependencies(projectRef, conf, deps)) yield {
+      // use settings data to access the task, in case it doesn't exist (as in non-SbtWeb projects)
       (exportedMappings in (p, c)) get data getOrElse constant(Seq.empty[PathMapping])
     }
     tasks.join.map(_.flatten)
   }
 
+  /*
+   * Get all the configuration and project dependencies for a project and configuration.
+   * For example, if there are two modules A and B, A depends on B, and B is exporting its test assets, then
+   * calling getDependencies with (A, TestAssets) will return (A, Assets) and (B, TestAssets) as dependencies.
+   */
   private def getDependencies(projectRef: ProjectRef, conf: Configuration, deps: BuildDependencies): Seq[(ProjectRef, Configuration)] = {
+    // depend on extended configurations in the same project (TestAssets -> Assets)
     val configDeps = conf.extendsConfigs map { c => (projectRef, c) }
+    // depend on the same configuration in all project dependencies (extracted from BuildDependencies)
     val moduleDeps = deps.classpath(projectRef) map { resolved => (resolved.project, conf) }
     configDeps ++ moduleDeps
   }

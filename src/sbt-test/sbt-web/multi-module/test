@@ -4,6 +4,7 @@ $ exists target/web/public/main/js/a.js
 $ exists target/web/public/main/js/b.js
 $ exists target/web/public/main/js/c.js
 $ exists target/web/public/main/js/d.js
+$ exists target/web/public/main/js/e.js
 $ exists target/web/public/main/lib/jquery/jquery.js
 
 > b/assets
@@ -11,17 +12,25 @@ $ exists target/web/public/main/lib/jquery/jquery.js
 $ exists modules/b/target/web/public/main/js/b.js
 $ exists modules/b/target/web/public/main/js/c.js
 $ exists modules/b/target/web/public/main/js/d.js
+$ exists modules/b/target/web/public/main/js/e.js
 $ exists modules/b/target/web/public/main/lib/jquery/jquery.js
 
 > c/assets
 
 $ exists modules/c/target/web/public/main/js/c.js
+$ exists modules/c/target/web/public/main/js/e.js
 $ exists modules/c/target/web/public/main/lib/jquery/jquery.js
 
 > d/assets
 
 $ exists modules/d/target/web/public/main/js/d.js
+$ exists modules/d/target/web/public/main/js/e.js
 $ exists modules/d/target/web/public/main/lib/jquery/jquery.js
+
+> e/assets
+
+$ exists modules/e/target/web/public/main/js/e.js
+$ exists modules/e/target/web/public/main/lib/jquery/jquery.js
 
 > a/web-assets-test:assets
 
@@ -29,6 +38,7 @@ $ exists target/web/public/test/js/a.js
 $ exists target/web/public/test/js/b.js
 $ exists target/web/public/test/js/c.js
 $ exists target/web/public/test/js/d.js
+$ exists target/web/public/test/js/e.js
 $ exists target/web/public/test/js/ta.js
 $ exists target/web/public/test/js/tb.js
 $ exists target/web/public/test/lib/jquery/jquery.js
@@ -38,5 +48,6 @@ $ exists target/web/public/test/lib/jquery/jquery.js
 $ exists modules/b/target/web/public/test/js/b.js
 $ exists modules/b/target/web/public/test/js/c.js
 $ exists modules/b/target/web/public/test/js/d.js
+$ exists modules/b/target/web/public/test/js/e.js
 $ exists modules/b/target/web/public/test/js/tb.js
 $ exists modules/b/target/web/public/test/lib/jquery/jquery.js

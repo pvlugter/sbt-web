@@ -11,16 +11,16 @@ lazy val b = (project in file("modules/b"))
 
 lazy val c = (project in file("modules/c"))
   .enablePlugins(SbtWeb)
-  .settings(
-    libraryDependencies += jquery
-  )
+  .dependsOn(e)
 
 lazy val d = (project in file("modules/d"))
   .enablePlugins(SbtWeb)
+  .dependsOn(e)
+
+lazy val e = (project in file("modules/e"))
+  .enablePlugins(SbtWeb)
   .settings(
-    libraryDependencies += jquery
+    libraryDependencies += "org.webjars" % "jquery" % "2.0.3-1"
   )
 
 lazy val x = (project in file("modules/x"))
-
-lazy val jquery = "org.webjars" % "jquery" % "2.0.3-1"

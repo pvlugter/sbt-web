@@ -289,7 +289,7 @@ object SbtWeb extends AutoPlugin {
   }
 
   private def getDependencies(projectRef: ProjectRef, conf: Configuration, deps: BuildDependencies): Seq[(ProjectRef, Configuration)] = {
-    val configDeps = Classpaths.allConfigs(conf) diff Seq(conf) map { c => (projectRef, c) }
+    val configDeps = conf.extendsConfigs map { c => (projectRef, c) }
     val moduleDeps = deps.classpath(projectRef) map { resolved => (resolved.project, conf) }
     configDeps ++ moduleDeps
   }

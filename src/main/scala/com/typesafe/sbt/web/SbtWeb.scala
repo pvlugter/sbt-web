@@ -180,12 +180,12 @@ object SbtWeb extends AutoPlugin {
     webJarsClassLoader in Plugin := SbtWeb.getClass.getClassLoader,
 
     assets in Assets := syncMappings(
-      streams.value.cacheDirectory,
+      (streams in Assets).value.cacheDirectory,
       (mappings in Assets).value,
       (public in Assets).value
     ),
     assets in TestAssets := syncMappings(
-      streams.value.cacheDirectory,
+      (streams in TestAssets).value.cacheDirectory,
       (mappings in Assets).value ++ (mappings in TestAssets).value,
       (public in TestAssets).value
     ),

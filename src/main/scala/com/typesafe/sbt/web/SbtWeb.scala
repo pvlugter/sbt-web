@@ -12,7 +12,7 @@ import sbt.File
 object Import {
 
   val Assets = config("web-assets")
-  val TestAssets = config("web-assets-test")
+  val TestAssets = config("web-assets-test").extend(Assets)
   val Plugin = config("web-plugin")
 
   val pipelineStages = SettingKey[Seq[TaskKey[Pipeline.Stage]]]("web-pipeline-stages", "Sequence of tasks for the asset pipeline stages.")
@@ -49,8 +49,8 @@ object Import {
     val assets = TaskKey[File]("assets", "All of the web assets.")
 
     val exportAssets = SettingKey[Boolean]("web-export-assets", "Determines whether assets should be exported to other projects.")
-    val exportedDirectories = TaskKey[Seq[File]]("web-exported-directories", "Asset directories that are exported to other projects.")
-    val assetDependencies = TaskKey[Seq[File]]("web-asset-dependencies", "Asset directories that are imported from project dependencies.")
+    val exportedMappings = TaskKey[Seq[PathMapping]]("web-exported-mappings", "Asset mappings that are exported to other projects.")
+    val dependencyMappings = TaskKey[Seq[PathMapping]]("web-dependency-mappings", "Asset mappings that are imported from project dependencies.")
 
     val allPipelineStages = TaskKey[Pipeline.Stage]("web-all-pipeline-stages", "All asset pipeline stages chained together.")
     val pipeline = TaskKey[Seq[PathMapping]]("web-pipeline", "Run all stages of the asset pipeline.")
@@ -183,18 +183,6 @@ object SbtWeb extends AutoPlugin {
     },
     webJarsClassLoader in Plugin := SbtWeb.getClass.getClassLoader,
 
-    assets in Assets := syncMappings(
-      (streams in Assets).value.cacheDirectory,
-      (mappings in Assets).value,
-      (public in Assets).value
-    ),
-    assets in TestAssets := syncMappings(
-      (streams in TestAssets).value.cacheDirectory,
-      deduplicateMappings(
-        (mappings in Assets).value ++ (mappings in TestAssets).value,
-        (deduplicators in TestAssets).value),
-      (public in TestAssets).value
-    ),
     assets := (assets in Assets).value,
 
     exportAssets in Assets := true,
@@ -256,23 +244,21 @@ object SbtWeb extends AutoPlugin {
     resources := managedResources.value ++ unmanagedResources.value,
 
     webModuleGenerators := Nil,
-    webModuleDirectories := Nil,
+    webModuleGenerators <+= webJars,
+    webModuleDirectories := Seq(webJarsDirectory.value),
     webModules := webModuleGenerators(_.join).map(_.flatten).value,
-
-    exportedDirectories := { if (exportAssets.value) Seq(assets.value) else Nil },
-    assetDependencies <<= (thisProjectRef, configuration, settingsData, buildDependencies) flatMap interDependencies,
-    webModuleDirectories ++= assetDependencies.value,
-    webModules ++= assetDependencies.value.***.get,
 
     webJarsDirectory := webModuleDirectory.value / "webjars",
     webJars := generateWebJars(webJarsDirectory.value, webModulesLib.value, (webJarsCache in webJars).value, webJarsClassLoader.value),
-    webModuleGenerators <+= webJars,
-    webModuleDirectories += webJarsDirectory.value,
+
+    exportedMappings := { if (exportAssets.value) mappings.value else Nil },
+    dependencyMappings <<= (thisProjectRef, configuration, settingsData, buildDependencies) flatMap interDependencies,
 
     mappings := {
       val files = (sources.value ++ resources.value ++ webModules.value) ---
         (sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value)
-      files pair relativeTo(sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value) | flat
+      val mapped = files pair relativeTo(sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value) | flat
+      dependencyMappings.value ++ mapped
     },
 
     pipelineStages := Seq.empty,
@@ -280,7 +266,9 @@ object SbtWeb extends AutoPlugin {
     mappings := allPipelineStages.value(mappings.value),
 
     deduplicators := Seq(selectFirstDirectory, selectFirstIdenticalFile),
-    mappings := deduplicateMappings(mappings.value, deduplicators.value)
+    mappings := deduplicateMappings(mappings.value, deduplicators.value),
+
+    assets := syncMappings(streams.value.cacheDirectory, mappings.value, public.value)
   )
 
   val nodeModulesSettings = Seq(
@@ -293,11 +281,17 @@ object SbtWeb extends AutoPlugin {
     nodeModules := nodeModuleGenerators(_.join).map(_.flatten).value
   )
 
-  private def interDependencies(projectRef: ProjectRef, conf: Configuration, data: Settings[Scope], deps: BuildDependencies): Task[Seq[File]] = {
-    val tasks: Seq[Task[Seq[File]]] = for (ResolvedClasspathDependency(dep, _) <- deps.classpath(projectRef)) yield {
-      (exportedDirectories in (dep, conf)) get data getOrElse constant(Seq.empty[File])
+  private def interDependencies(projectRef: ProjectRef, conf: Configuration, data: Settings[Scope], deps: BuildDependencies): Task[Seq[PathMapping]] = {
+    val tasks = for ((p, c) <- getDependencies(projectRef, conf, deps)) yield {
+      (exportedMappings in (p, c)) get data getOrElse constant(Seq.empty[PathMapping])
     }
-    tasks.join.map(_.flatten.distinct)
+    tasks.join.map(_.flatten)
+  }
+
+  private def getDependencies(projectRef: ProjectRef, conf: Configuration, deps: BuildDependencies): Seq[(ProjectRef, Configuration)] = {
+    val configDeps = Classpaths.allConfigs(conf) diff Seq(conf) map { c => (projectRef, c) }
+    val moduleDeps = deps.classpath(projectRef) map { resolved => (resolved.project, conf) }
+    configDeps ++ moduleDeps
   }
 
   private def withWebJarExtractor(to: File, cacheFile: File, classLoader: ClassLoader)

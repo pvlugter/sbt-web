@@ -4,7 +4,7 @@ lazy val a = (project in file("."))
 
 lazy val b = (project in file("modules/b"))
   .enablePlugins(SbtWeb)
-  .dependsOn(c, d)
+  .dependsOn(c, d, x)
   .settings(
     WebKeys.exportAssets in TestAssets := true
   )
@@ -20,5 +20,7 @@ lazy val d = (project in file("modules/d"))
   .settings(
     libraryDependencies += jquery
   )
+
+lazy val x = (project in file("modules/x"))
 
 lazy val jquery = "org.webjars" % "jquery" % "2.0.3-1"

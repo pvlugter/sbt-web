@@ -7,7 +7,7 @@ $ exists target/web/public/main/js/d.js
 $ exists target/web/public/main/js/e.js
 $ exists target/web/public/main/lib/jquery/jquery.js
 
-> b/assets
+# > b/assets
 
 $ exists modules/b/target/web/public/main/js/b.js
 $ exists modules/b/target/web/public/main/js/c.js
@@ -15,19 +15,19 @@ $ exists modules/b/target/web/public/main/js/d.js
 $ exists modules/b/target/web/public/main/js/e.js
 $ exists modules/b/target/web/public/main/lib/jquery/jquery.js
 
-> c/assets
+# > c/assets
 
 $ exists modules/c/target/web/public/main/js/c.js
 $ exists modules/c/target/web/public/main/js/e.js
 $ exists modules/c/target/web/public/main/lib/jquery/jquery.js
 
-> d/assets
+# > d/assets
 
 $ exists modules/d/target/web/public/main/js/d.js
 $ exists modules/d/target/web/public/main/js/e.js
 $ exists modules/d/target/web/public/main/lib/jquery/jquery.js
 
-> e/assets
+# > e/assets
 
 $ exists modules/e/target/web/public/main/js/e.js
 $ exists modules/e/target/web/public/main/lib/jquery/jquery.js
@@ -51,7 +51,7 @@ $ exists modules/d/target/web/public/test/js/t.js
 $ exists modules/d/target/web/public/test/js/u.js
 $ exists modules/d/target/web/public/test/lib/jquery/jquery.js
 
-> e/web-assets-test:assets
+# > e/web-assets-test:assets
 
 $ exists modules/e/target/web/public/main/js/e.js
 $ exists modules/e/target/web/public/test/js/t.js

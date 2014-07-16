@@ -31,7 +31,7 @@ object Import {
     val nodeModules = TaskKey[Seq[File]]("web-node-modules", "All node module files.")
 
     val webModuleDirectory = SettingKey[File]("web-module-directory", "Default web modules directory, used for web browser based resources.")
-    val webModuleDirectories = SettingKey[Seq[File]]("web-module-directories", "The list of directories that web browser modules are to expand into.")
+    val webModuleDirectories = TaskKey[Seq[File]]("web-module-directories", "The list of directories that web browser modules are to expand into.")
     val webModuleGenerators = SettingKey[Seq[Task[Seq[File]]]]("web-module-generators", "List of tasks that generate web browser modules.")
     val webModulesLib = SettingKey[String]("web-modules-lib", "The sub folder of the path to extract web browser modules to")
     val webModules = TaskKey[Seq[File]]("web-modules", "All web browser module files.")
@@ -49,8 +49,9 @@ object Import {
     val assets = TaskKey[File]("assets", "All of the web assets.")
 
     val exportAssets = SettingKey[Boolean]("web-export-assets", "Determines whether assets should be exported to other projects.")
-    val exportedMappings = TaskKey[Seq[PathMapping]]("web-exported-mappings", "Asset mappings that are exported to other projects.")
-    val dependencyMappings = TaskKey[Seq[PathMapping]]("web-dependency-mappings", "Asset mappings that are imported from project dependencies.")
+    val exportedAssetpath = TaskKey[Seq[File]]("web-exported-assetpath", "Asset directeries that are exported to other projects.")
+    val dependencyAssetpath = TaskKey[Seq[File]]("web-dependency-assetpath", "Asset directories that are imported from project dependencies.")
+    val dependencyModules = TaskKey[Seq[File]]("web-dependency-modules", "All module files from project dependencies.")
 
     val allPipelineStages = TaskKey[Pipeline.Stage]("web-all-pipeline-stages", "All asset pipeline stages chained together.")
     val pipeline = TaskKey[Seq[PathMapping]]("web-pipeline", "Run all stages of the asset pipeline.")
@@ -244,21 +245,24 @@ object SbtWeb extends AutoPlugin {
     resources := managedResources.value ++ unmanagedResources.value,
 
     webModuleGenerators := Nil,
-    webModuleGenerators <+= webJars,
-    webModuleDirectories := Seq(webJarsDirectory.value),
+    webModuleDirectories := Nil,
     webModules := webModuleGenerators(_.join).map(_.flatten).value,
+
+    exportedAssetpath := { if (exportAssets.value) Seq(assets.value) else Nil },
+    dependencyAssetpath <<= (thisProjectRef, configuration, settingsData, buildDependencies) flatMap interDependencies,
+    dependencyModules := dependencyAssetpath.value.***.get,
+    webModuleGenerators <+= dependencyModules,
+    webModuleDirectories ++= dependencyAssetpath.value,
 
     webJarsDirectory := webModuleDirectory.value / "webjars",
     webJars := generateWebJars(webJarsDirectory.value, webModulesLib.value, (webJarsCache in webJars).value, webJarsClassLoader.value),
-
-    exportedMappings := { if (exportAssets.value) mappings.value else Nil },
-    dependencyMappings <<= (thisProjectRef, configuration, settingsData, buildDependencies) flatMap interDependencies,
+    webModuleGenerators <+= webJars,
+    webModuleDirectories += webJarsDirectory.value,
 
     mappings := {
       val files = (sources.value ++ resources.value ++ webModules.value) ---
         (sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value)
-      val mapped = files pair relativeTo(sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value) | flat
-      dependencyMappings.value ++ mapped
+      files pair relativeTo(sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value) | flat
     },
 
     pipelineStages := Seq.empty,
@@ -284,13 +288,13 @@ object SbtWeb extends AutoPlugin {
   /*
    * Create a task that gets the combined exportedMappings from all project and configuration dependencies.
    */
-  private def interDependencies(projectRef: ProjectRef, conf: Configuration, data: Settings[Scope], deps: BuildDependencies): Task[Seq[PathMapping]] = {
+  private def interDependencies(projectRef: ProjectRef, conf: Configuration, data: Settings[Scope], deps: BuildDependencies): Task[Seq[File]] = {
     // map each (project, configuration) pair from getDependencies to its exportedMappings task
     val tasks = for ((p, c) <- getDependencies(projectRef, conf, deps)) yield {
       // use settings data to access the task, in case it doesn't exist (as in non-SbtWeb projects)
-      (exportedMappings in (p, c)) get data getOrElse constant(Seq.empty[PathMapping])
+      (exportedAssetpath in (p, c)) get data getOrElse constant(Seq.empty[File])
     }
-    tasks.join.map(_.flatten)
+    tasks.join.map(_.flatten.distinct)
   }
 
   /*

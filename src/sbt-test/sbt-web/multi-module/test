@@ -1,0 +1,34 @@
+> assets
+
+$ exists target/web/public/main/js/a.js
+$ exists target/web/public/main/js/b.js
+$ exists target/web/public/main/js/c.js
+$ exists target/web/public/main/js/d.js
+$ exists target/web/public/main/lib/jquery/jquery.js
+
+$ exists modules/b/target/web/public/main/js/b.js
+$ exists modules/b/target/web/public/main/js/c.js
+$ exists modules/b/target/web/public/main/js/d.js
+$ exists modules/b/target/web/public/main/lib/jquery/jquery.js
+
+$ exists modules/c/target/web/public/main/js/c.js
+$ exists modules/c/target/web/public/main/lib/jquery/jquery.js
+
+$ exists modules/d/target/web/public/main/js/d.js
+$ exists modules/d/target/web/public/main/lib/jquery/jquery.js
+
+> web-assets-test:assets
+
+$ exists target/web/public/test/js/a.js
+$ exists target/web/public/test/js/b.js
+$ exists target/web/public/test/js/c.js
+$ exists target/web/public/test/js/d.js
+$ exists target/web/public/test/js/ta.js
+$ exists target/web/public/test/js/tb.js
+$ exists target/web/public/test/lib/jquery/jquery.js
+
+$ exists modules/b/target/web/public/test/js/b.js
+$ exists modules/b/target/web/public/test/js/c.js
+$ exists modules/b/target/web/public/test/js/d.js
+$ exists modules/b/target/web/public/test/js/tb.js
+$ exists modules/b/target/web/public/test/lib/jquery/jquery.js

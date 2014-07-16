@@ -12,7 +12,7 @@ import sbt.File
 object Import {
 
   val Assets = config("web-assets")
-  val TestAssets = config("web-assets-test")
+  val TestAssets = config("web-assets-test").extend(Assets)
   val Plugin = config("web-plugin")
 
   val pipelineStages = SettingKey[Seq[TaskKey[Pipeline.Stage]]]("web-pipeline-stages", "Sequence of tasks for the asset pipeline stages.")
@@ -47,6 +47,10 @@ object Import {
     val deduplicators = TaskKey[Seq[Deduplicator]]("web-deduplicators", "Functions that select from duplicate asset mappings")
 
     val assets = TaskKey[File]("assets", "All of the web assets.")
+
+    val exportAssets = SettingKey[Boolean]("web-export-assets", "Determines whether assets should be exported to other projects.")
+    val exportedMappings = TaskKey[Seq[PathMapping]]("web-exported-mappings", "Asset mappings that are exported to other projects.")
+    val dependencyMappings = TaskKey[Seq[PathMapping]]("web-dependency-mappings", "Asset mappings that are imported from project dependencies.")
 
     val allPipelineStages = TaskKey[Pipeline.Stage]("web-all-pipeline-stages", "All asset pipeline stages chained together.")
     val pipeline = TaskKey[Seq[PathMapping]]("web-pipeline", "Run all stages of the asset pipeline.")
@@ -179,17 +183,10 @@ object SbtWeb extends AutoPlugin {
     },
     webJarsClassLoader in Plugin := SbtWeb.getClass.getClassLoader,
 
-    assets in Assets := syncMappings(
-      streams.value.cacheDirectory,
-      (mappings in Assets).value,
-      (public in Assets).value
-    ),
-    assets in TestAssets := syncMappings(
-      streams.value.cacheDirectory,
-      (mappings in Assets).value ++ (mappings in TestAssets).value,
-      (public in TestAssets).value
-    ),
     assets := (assets in Assets).value,
+
+    exportAssets in Assets := true,
+    exportAssets in TestAssets := false,
 
     compile in Assets := inc.Analysis.Empty,
     compile in TestAssets := inc.Analysis.Empty,
@@ -254,18 +251,24 @@ object SbtWeb extends AutoPlugin {
     webJarsDirectory := webModuleDirectory.value / "webjars",
     webJars := generateWebJars(webJarsDirectory.value, webModulesLib.value, (webJarsCache in webJars).value, webJarsClassLoader.value),
 
+    exportedMappings := { if (exportAssets.value) mappings.value else Nil },
+    dependencyMappings <<= (thisProjectRef, configuration, settingsData, buildDependencies) flatMap interDependencies,
+
     mappings := {
       val files = (sources.value ++ resources.value ++ webModules.value) ---
         (sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value)
-      files pair relativeTo(sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value) | flat
+      val mapped = files pair relativeTo(sourceDirectories.value ++ resourceDirectories.value ++ webModuleDirectories.value) | flat
+      dependencyMappings.value ++ mapped
     },
 
     pipelineStages := Seq.empty,
     allPipelineStages <<= Pipeline.chain(pipelineStages),
     mappings := allPipelineStages.value(mappings.value),
 
-    deduplicators := Nil,
-    mappings := deduplicateMappings(mappings.value, deduplicators.value)
+    deduplicators := Seq(selectFirstDirectory, selectFirstIdenticalFile),
+    mappings := deduplicateMappings(mappings.value, deduplicators.value),
+
+    assets := syncMappings(streams.value.cacheDirectory, mappings.value, public.value)
   )
 
   val nodeModulesSettings = Seq(
@@ -278,6 +281,30 @@ object SbtWeb extends AutoPlugin {
     nodeModules := nodeModuleGenerators(_.join).map(_.flatten).value
   )
 
+  /*
+   * Create a task that gets the combined exportedMappings from all project and configuration dependencies.
+   */
+  private def interDependencies(projectRef: ProjectRef, conf: Configuration, data: Settings[Scope], deps: BuildDependencies): Task[Seq[PathMapping]] = {
+    // map each (project, configuration) pair from getDependencies to its exportedMappings task
+    val tasks = for ((p, c) <- getDependencies(projectRef, conf, deps)) yield {
+      // use settings data to access the task, in case it doesn't exist (as in non-SbtWeb projects)
+      (exportedMappings in (p, c)) get data getOrElse constant(Seq.empty[PathMapping])
+    }
+    tasks.join.map(_.flatten)
+  }
+
+  /*
+   * Get all the configuration and project dependencies for a project and configuration.
+   * For example, if there are two modules A and B, A depends on B, and B is exporting its test assets, then
+   * calling getDependencies with (A, TestAssets) will return (A, Assets) and (B, TestAssets) as dependencies.
+   */
+  private def getDependencies(projectRef: ProjectRef, conf: Configuration, deps: BuildDependencies): Seq[(ProjectRef, Configuration)] = {
+    // depend on extended configurations in the same project (TestAssets -> Assets)
+    val configDeps = conf.extendsConfigs map { c => (projectRef, c) }
+    // depend on the same configuration in all project dependencies (extracted from BuildDependencies)
+    val moduleDeps = deps.classpath(projectRef) map { resolved => (resolved.project, conf) }
+    configDeps ++ moduleDeps
+  }
 
   private def withWebJarExtractor(to: File, cacheFile: File, classLoader: ClassLoader)
                                  (block: (WebJarExtractor, File) => Unit): File = {
@@ -348,8 +375,32 @@ object SbtWeb extends AutoPlugin {
    * @param base the base directory to check against
    * @return a deduplicator function that prefers files in the base directory
    */
-  def selectFileFrom(base: File): Deduplicator = {
-    (files: Seq[File]) => files.find(_.relativeTo(base).isDefined)
+  def selectFileFrom(base: File): Deduplicator = { (files: Seq[File]) =>
+    files.find(_.relativeTo(base).isDefined)
+  }
+
+  /**
+   * Deduplicator that checks whether all duplicates are directories
+   * and if so will simply select the first one.
+   *
+   * @return a deduplicator function for duplicate directories
+   */
+  def selectFirstDirectory: Deduplicator = selectFirstWhen { files =>
+    files.forall(_.isDirectory)
+  }
+
+  /**
+   * Deduplicator that checks that all duplicates have the same contents hash
+   * and if so will simply select the first one.
+   *
+   * @return a deduplicator function for checking identical contents
+   */
+  def selectFirstIdenticalFile: Deduplicator = selectFirstWhen { files =>
+    files.forall(_.isFile) && files.map(_.hashString).distinct.size == 1
+  }
+
+  private def selectFirstWhen(predicate: Seq[File] => Boolean): Deduplicator = {
+    (files: Seq[File]) => if (predicate(files)) files.headOption else None
   }
 
   // Mapping synchronization
